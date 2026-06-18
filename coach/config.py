@@ -6,12 +6,17 @@ RUNNING_DIR = Path("/mnt/hgfs/D/OneDrive/Running")
 XLSX        = RUNNING_DIR / "Conditie verloop.xlsx"
 ACT_DIR     = RUNNING_DIR / "Garmin" / "ACTIVITY"
 
+# Garmin "Export Your Data" (GDPR-dump): historische wellness + GC-activiteiten.
+# Mag ontbreken; de DB-laag slaat ontbrekende bronnen stil over.
+EXPORT_DIR  = RUNNING_DIR / "Garmin" / "download data from garmin site"
+
 # --- Uitvoer (ALLES in de projectmap zelf: .../Running/claude coach/) ---
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 CHART_DIR   = PROJECT_DIR / "charts"
 REPORT      = PROJECT_DIR / "Analyse_Looptraining.md"   # één samengevoegd verslag
 WEEK_DIR    = PROJECT_DIR / "Weken"                     # één markdown-bestand per ISO-week
 CACHE_JSON  = PROJECT_DIR / "runs.json"
+DB_PATH     = PROJECT_DIR / "garmin.db"                 # SQLite-databank (alle bronnen)
 
 # Markers waarbinnen het handmatig ingevulde logboek bij elke verversing behouden blijft
 LOG_START   = "<!-- LOGBOEK:START — alles tussen deze markers blijft behouden -->"

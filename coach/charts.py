@@ -159,6 +159,91 @@ def chart_pace_hr_zones(runs, year=None):
     return _save(fig, "06_pace_vs_hr.png")
 
 
+def _smooth_pace(speed_ms, w=8):
+    """Mediaan-gefilterd tempo (s/km) uit de speed-stroom; None waar stilstand/ontbreekt."""
+    import statistics
+    raw = [(1000.0 / v) if (v and v > 0.5) else None for v in speed_ms]
+    out = []
+    for i in range(len(raw)):
+        seg = [v for v in raw[max(0, i - w):i + w + 1] if v is not None]
+        out.append(statistics.median(seg) if seg else None)
+    return out
+
+
+def _work_blocks(elapsed_s, pace_s, hr, dist_m, threshold=330, min_dur=60):
+    """Detecteer werkblokken (tempo < `threshold` s/km, > `min_dur` s) als analyse-segmenten."""
+    blocks, cur = [], None
+    for i, p in enumerate(pace_s):
+        work = p is not None and p < threshold
+        if cur is None or cur["work"] != work:
+            if cur:
+                blocks.append(cur)
+            cur = {"work": work, "i0": i, "i1": i}
+        else:
+            cur["i1"] = i
+    if cur:
+        blocks.append(cur)
+    out = []
+    for b in blocks:
+        dur = elapsed_s[b["i1"]] - elapsed_s[b["i0"]]
+        if not b["work"] or dur < min_dur:
+            continue
+        ps = [p for p in pace_s[b["i0"]:b["i1"] + 1] if p]
+        hrs = [h for h in hr[b["i0"]:b["i1"] + 1] if h]
+        out.append({
+            "t0": elapsed_s[b["i0"]] / 60, "t1": elapsed_s[b["i1"]] / 60,
+            "dur": dur, "dist": (dist_m[b["i1"]] or 0) - (dist_m[b["i0"]] or 0),
+            "pace": sum(ps) / len(ps) if ps else None,
+            "hr_avg": round(sum(hrs) / len(hrs)) if hrs else None,
+            "hr_peak": max(hrs) if hrs else None,
+        })
+    return out
+
+
+def chart_workout_vs_plan(stream, plan, name, title):
+    """Uitgevoerde kwaliteitssessie (tempo + HS over tijd) tegen het geplande doel.
+
+    `stream` = dict uit db.run_stream; `plan` = {pace_lo, pace_hi, hr_lo, hr_hi, reps, minutes}
+    (tempo-grenzen in s/km). Tekent het geplande doelvenster als groene band en markeert de
+    gedetecteerde werkblokken. Geeft de bestandsnaam terug (in CHART_DIR).
+    """
+    t = [e / 60 for e in stream["elapsed_s"]]
+    pace_s = _smooth_pace(stream["speed_ms"])
+    pace_min = [p / 60 if p else None for p in pace_s]
+    blocks = _work_blocks(stream["elapsed_s"], pace_s, stream["hr"], stream["distance_m"])
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 6.5), sharex=True,
+                                   gridspec_kw={"height_ratios": [3, 2]})
+    # --- tempo ---
+    ax1.axhspan(plan["pace_lo"] / 60, plan["pace_hi"] / 60, color="#27ae60", alpha=0.18,
+                label=f"gepland drempeltempo {_mmss(plan['pace_lo'])}–{_mmss(plan['pace_hi'])}/km "
+                      f"({plan['reps']}×{plan['minutes']}′)")
+    ax1.plot(t, pace_min, color="#2980b9", lw=0.7, label="uitgevoerd tempo")
+    for n, b in enumerate(blocks, 1):
+        ax1.axvspan(b["t0"], b["t1"], color="#2980b9", alpha=0.08)
+        if b["pace"]:
+            ax1.annotate(f"blok {n}\n{_mmss(b['pace'])}", (b["t0"] + (b["t1"] - b["t0"]) / 2, 4.55),
+                         ha="center", va="top", fontsize=8, color="#21618c")
+    ax1.set_ylabel("tempo (min/km)")
+    ax1.set_ylim(8.2, 4.4)              # omgekeerd: sneller = boven
+    ax1.set_title(title)
+    ax1.legend(loc="lower right", fontsize=8)
+    # --- hartslag ---
+    ax2.axhspan(plan["hr_lo"], plan["hr_hi"], color="#27ae60", alpha=0.18,
+                label=f"gepland HS-doel {plan['hr_lo']}–{plan['hr_hi']}")
+    ax2.plot(t, stream["hr"], color="#c0392b", lw=0.7, label="uitgevoerde HS")
+    for b in blocks:
+        ax2.axvspan(b["t0"], b["t1"], color="#2980b9", alpha=0.08)
+    ax2.set_ylabel("HS (bpm)")
+    ax2.set_xlabel("tijd (min)")
+    ax2.legend(loc="lower right", fontsize=8)
+    return _save(fig, name)
+
+
+def _mmss(sec):
+    return f"{int(sec // 60)}:{int(round(sec % 60)):02d}"
+
+
 def generate_all(runs):
     out = []
     for fn in (chart_monthly_volume, chart_efficiency, chart_hrmax,

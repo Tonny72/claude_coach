@@ -44,4 +44,28 @@ for f in "$SRC"/*.fit "$SRC"/*.FIT; do
 done
 
 echo
-echo "Klaar: $copied nieuw gekopieerd, $skipped al aanwezig."
+echo "Klaar (horloge → ACTIVITY): $copied nieuw gekopieerd, $skipped al aanwezig."
+
+# --- Fase 2: backup van ALLE activiteit-FIT's naar de projectmap ---------------
+# Spiegelt $DEST naar de projectmap zodat het project een self-contained kopie
+# heeft (ongeacht of een bestand van het horloge of elders kwam). Alleen nieuwe
+# bestanden; bestaande worden nooit overschreven.
+PROJECT_DIR=$(dirname "$(readlink -f "$0")")
+BACKUP="$PROJECT_DIR/data/activities"
+mkdir -p "$BACKUP"
+
+echo
+echo "Backup → $BACKUP"
+bcopied=0
+bskipped=0
+for f in "$DEST"/*.fit "$DEST"/*.FIT; do
+  [[ -e "$f" ]] || continue
+  name=$(basename "$f")
+  if [[ -e "$BACKUP/$name" ]]; then
+    bskipped=$((bskipped+1))
+    continue
+  fi
+  cp -n "$f" "$BACKUP/$name"
+  bcopied=$((bcopied+1))
+done
+echo "Klaar (backup → project): $bcopied nieuw gekopieerd, $bskipped al aanwezig."

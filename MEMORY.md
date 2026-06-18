@@ -1,6 +1,6 @@
 # MEMORY — Running-coach (context die over sessies heen blijft)
 
-_Laatst bijgewerkt: 2026-06-14. Dit bestand vat de duurzame context samen zodat Claude
+_Laatst bijgewerkt: 2026-06-18. Dit bestand vat de duurzame context samen zodat Claude
 als persoonlijke trainingscoach niet telkens opnieuw hoeft te beginnen. Werk het bij
 zodra er iets structureels verandert._
 
@@ -23,7 +23,8 @@ zodra er iets structureels verandert._
 - ACWR 0,95 🟢 · CTL 33 · ATL 49 · TSB −10. Gezond, lichte vermoeidheid, fitnessbasis nog dun.
 
 ## Werkwijze "Claude als wekelijkse coach"
-1. Horloge koppelen → `bash sync_garmin.sh` kopieert nieuwe `.fit` naar `…/Running/Garmin/ACTIVITY/`.
+1. Horloge koppelen → `bash sync_garmin.sh`: fase 1 kopieert nieuwe `.fit` naar `…/Running/Garmin/ACTIVITY/`,
+   fase 2 spiegelt ACTIVITY naar de project-backup `claude coach/data/activities/` (83 MB, alleen nieuwe).
 2. Tool draaien (zie README): `python running_coach.py --cache` ververst charts + weekdocument
    (Claude doet dit voor je; jij hoeft alleen te syncen).
 3. Vraag Claude "analyseer mijn nieuwe runs" zodra een week gelopen is.
@@ -37,14 +38,38 @@ analyse vullen zich later vanzelf). Zelfstandig leesbaar, met:
 hier zet Claude de uitgebreide per-run-analyse + gedetailleerde sessie-uitwerking).
 Excel = bevroren historie; de weekdocumenten zijn het levende document.
 
+## Databank (`garmin.db`, SQLite — sinds 2026-06-18)
+Eén querybaar bestand `claude coach/garmin.db` dat alle bronnen samenbrengt. Bouwen/verversen:
+`python build_db.py` (incrementeel, ~1 s) of `--rebuild` (volledig, ~min) · `--status` toont inhoud.
+Code: `coach/db.py` (schema + ingestie). **Incrementeel** via `files`-tabel (sha1-hash per bronbestand).
+- **`activities`** (1911, 2001→2026): FIT 2023→heden (alle sporten, met laps) + Excel-log voor dagen
+  zonder FIT. Dedup op `start_time`. Excel-rijen alleen voor niet-FIT-dagen.
+- **`activity_laps`** (~4060): lap/km-splits per FIT-activiteit.
+- **`activity_records`** (~1,07 mln punten, 318 runs): de **per-seconde-stroom** uit de FIT
+  `record`-berichten (HS, snelheid→tempo, cadans, hoogte, afstand, GPS, vermogen) — alleen
+  hardlopen. Hiermee kun je detailgrafieken in weekrapporten zetten en losse runs diep analyseren.
+  Toegang via `db.find_activity(con, date)` + `db.run_stream(con, activity_id)` (kolom-lijsten,
+  incl. afgeleid `pace_s_km`). DB groeit hierdoor naar ~84 MB (staat in `.gitignore`).
+- **`daily_wellness`** (3421 dagen, 2014→2025-04): rust-HS, stress, body battery, respiratie,
+  stappen, intensiteitsminuten, calorieën, hydratatie — uit UDS-JSON in de GDPR-export.
+- **`personal_records`** (36) + **`gear`** (8 paar schoenen) uit de GDPR-export.
+- **Niet bruikbaar gebleken:** GC-historie `summarizedActivities.json` = alleen geaggregeerde
+  records (geen losse activiteiten) → bewust niet ingelezen; Excel dekt 2011-2016.
+- **Ontbreekt in de export:** gedetailleerde slaap-fases & HRV-tijdreeksen (mappen leeg). Voor die
+  historie een **nieuwe** Garmin Connect "Export Your Data" aanvragen (huidige loopt t/m 2025-04-10).
+
 ## Paden (BELANGRIJK)
-- **Projectmap / alle output:** `…/Running/claude coach/` (verslag, `Weken/`, `charts/`, `runs.json`).
+- **Projectmap / alle output:** `…/Running/claude coach/` (verslag, `Weken/`, `charts/`, `runs.json`,
+  `garmin.db`, `data/activities/` = FIT-backup). `.gitignore` houdt FIT-backup + DB uit git (OneDrive = backup).
 - **Brondata (blijft in parent):** Excel `…/Running/Conditie verloop.xlsx` +
-  Garmin `…/Running/Garmin/ACTIVITY/*.fit`.
+  Garmin `…/Running/Garmin/ACTIVITY/*.fit` + GDPR-export `…/Running/Garmin/download data from garmin site/`.
 - **Venv (buiten de map, want HGFS heeft geen symlinks):** `~/.venvs/garmin-coach`.
 - Config: `coach/config.py` — outputs afgeleid van `PROJECT_DIR`, brondata van `RUNNING_DIR`.
 
 ## Laatst gedaan
+- 2026-06-18: **SQLite-databank `garmin.db` gebouwd** (`coach/db.py` + `build_db.py`) uit FIT +
+  Excel + GDPR-export. Zie sectie "Databank". Ook W25 (16+18 juni) ingeladen en `Weken/2026-W25.md`
+  mid-week bijgewerkt (do = drempel naar voren gehaald → vrijdag geen tweede kwaliteit).
 - 2026-06-14: padwijziging `claude` → `claude coach` doorgevoerd in `config.py` (output nu in projectmap).
   `weekly.py` uitgebreid met sectie "Actuele trainingszones"; secties hernummerd (nu 5);
   documenten vooruit-benoemd naar de plan-week; 2 weken vooruit gepland (`build_plan_only`).

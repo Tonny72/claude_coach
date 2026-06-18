@@ -276,41 +276,53 @@ def _next_plan(runs, year, this_km, had_interval):
         target, deload = min(round(this_km * 1.1), 42), False
 
     lang = max(12, min(16, round(target - 24)))
+    # Garmin: easy/lange dagen op HS-alarm (blijf onder de grijze zone),
+    # kwaliteitsdagen als gestructureerde workout met tempo-doel.
+    easy_cap = hz['matig'][0]            # boven deze HS begint de grijze zone
+    rec_cap = hz['rustig'][0] + 8        # herstel écht rustig houden
+    g_easy = f"HS-alarm >{easy_cap}"
+    g_long = f"HS-alarm >{easy_cap}"
+    g_rec = f"HS-alarm >{rec_cap}"
+
     # kwaliteit afwisselen t.o.v. afgelopen week
     if deload:
         q_title = "Terugloop — alleen 6× strides"
         q_detail = f"6× 15 s strides @ {rng(targets['strides'])}/km, volledige rust. Geen reps."
         q_km = 6
+        q_garmin = "Gevoel/vrij — geen targets"
     elif had_interval:
         q_title = "Drempel/tempo 3×8′"
         q_detail = (f"Inlopen 2 km → **3 × 8′** @ {rng(targets['drempel'])}/km (HS {hr_thr}), "
                     f"2′ dribbel ertussen → 1,5 km uitlopen.")
         q_km = 9
+        q_garmin = f"Workout · tempo {rng(targets['drempel'])} · HS-plafond {hz['drempel'][1]}"
     else:
         q_title = "Interval 5×1000 m"
         q_detail = (f"Inlopen 2,5 km + strides → **5 × 1000 m** @ {rng(targets['interval'])}/km "
                     f"(HS {hr_itv}), 2:30–3:00′ dribbel → 1,5 km uitlopen.")
         q_km = 9
+        q_garmin = f"Workout · tempo {rng(targets['interval'])}/rep · rust tot HS <{hz['rustig'][1]}"
 
     rust_km = max(4, round(target - lang - q_km - 10))
     plan = [
-        ("Maandag", "Rust of kracht", "20–30′ kracht (squat/lunge/calf/romp) óf volledige rust.", 0),
-        ("Dinsdag", "Rustige duurloop", f"~10 km @ {rng(targets['rustig'])}/km — HS {hr_easy}.", 10),
-        ("Woensdag", "Kracht", "Krachttraining 25–30′ — dé blessurebuffer op 54 j.", 0),
+        ("Maandag", "Rust of kracht", "20–30′ kracht (squat/lunge/calf/romp) óf volledige rust.", 0, "—"),
+        ("Dinsdag", "Rustige duurloop", f"~10 km @ {rng(targets['rustig'])}/km — HS {hr_easy}.", 10, g_easy),
+        ("Woensdag", "Kracht", "Krachttraining 25–30′ — dé blessurebuffer op 54 j.", 0, "—"),
         ("Donderdag", f"Herstelloop ~{rust_km} km",
-         f"{rust_km} km heel rustig @ {rng(targets['herstel'])}/km — HS {hr_rec}, óf rust.", rust_km),
-        ("Vrijdag", q_title, q_detail, q_km),
-        ("Zaterdag", "Rust", "Volledige rustdag (min. 48 u tot de lange duurloop).", 0),
+         f"{rust_km} km heel rustig @ {rng(targets['herstel'])}/km — HS {hr_rec}, óf rust.", rust_km, g_rec),
+        ("Vrijdag", q_title, q_detail, q_km, q_garmin),
+        ("Zaterdag", "Rust", "Volledige rustdag (min. 48 u tot de lange duurloop).", 0, "—"),
         ("Zondag", f"Lange duurloop ~{lang} km",
          f"{lang} km gelijkmatig @ {rng(targets['lange'])}/km — HS {hr_easy}. "
-         "Laatste 2 km iets vlotter mag.", lang),
+         "Laatste 2 km iets vlotter mag.", lang, g_long),
     ]
-    body = "\n".join(f"| {p[0]} | **{p[1]}** | {p[2]} |" for p in plan)
+    body = "\n".join(f"| {p[0]} | **{p[1]}** | {p[2]} | {p[4]} |" for p in plan)
     est = sum(p[3] for p in plan)
     head = (f"**Doelvolume: ~{target} km** "
             + ("(⬇️ terugloopweek — bewust minder) " if deload else "(+10%-regel) ")
             + f"· geschat schema ~{est} km · max één harde dag · 2× kracht.")
-    md = head + "\n\n| Dag | Sessie | Detail |\n|---|---|---|\n" + body + "\n"
+    md = (head + "\n\n| Dag | Sessie | Detail | Garmin-instelling |\n|---|---|---|---|\n"
+          + body + "\n")
     quality = "deload" if deload else ("drempel" if had_interval else "interval")
     return md, target, quality
 

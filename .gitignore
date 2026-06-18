@@ -1,0 +1,8 @@
+# Gegenereerd / geback-upt — niet in git (OneDrive is de backup, DB is regenereerbaar)
+data/activities/      # FIT-backup (83 MB), gevuld door sync_garmin.sh
+garmin.db             # SQLite-databank — herbouwen met: python build_db.py --rebuild
+
+# Python / IDE
+__pycache__/
+*.pyc
+.idea/
